@@ -135,10 +135,8 @@ Mushroom-Classification-MLOps/
 
 ## 👩‍💻 Contributor
 **Diya Kharel**  
-MSc Computing – Data Management & MLOps (BCU)
 
 ---
 
 ## 📬 Contact
 For questions or suggestions, feel free to open an issue on GitHub.
-# Mushroom-Classification-MLops-pipeline
