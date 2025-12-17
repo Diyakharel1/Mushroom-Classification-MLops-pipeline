@@ -1,0 +1,36 @@
+[mysqld]
+# ColumnStore Configuration
+default_storage_engine = Columnstore
+columnstore_use_import_for_batchinsert = ALWAYS
+
+# Performance tuning
+innodb_buffer_pool_size = 256M
+key_buffer_size = 64M
+max_connections = 200
+query_cache_size = 32M
+query_cache_type = 1
+
+# Binary logging for replication
+log_bin = mysql-bin
+binlog_format = ROW
+expire_logs_days = 7
+
+# ColumnStore specific settings
+columnstore_decimal_scale = 8
+columnstore_double_precision = 15
+columnstore_varcharThreshold = 7
+
+# Memory settings
+tmp_table_size = 64M
+max_heap_table_size = 64M
+
+# Connection settings
+connect_timeout = 10
+wait_timeout = 3600
+interactive_timeout = 3600
+
+# Logging
+general_log = 0
+slow_query_log = 1
+slow_query_log_file = /var/lib/mysql/mysql-slow.log
+long_query_time = 2

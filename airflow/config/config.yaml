@@ -1,0 +1,91 @@
+# Mushroom Classification ETL Pipeline Configuration
+
+# Paths
+paths:
+  raw_data: "data/raw/secondary_data.csv"
+  processed_data: "data/processed"
+  model_input: "data/model_input"
+  models: "models"
+  metrics: "models/metrics"
+
+# Train-test split parameters
+split:
+  test_size: 0.3
+  random_state: 42
+
+# Database configuration
+database:
+  oltp:
+    host: "localhost"
+    port: 3307
+    user: "root"
+    password: "${MARIADB_OLTP_ROOT_PASSWORD}"
+    database: "mushroom_oltp_db"
+
+  olap:
+    host: "localhost"
+    port: 3308
+    user: "root"
+    password: "${MARIADB_OLAP_ROOT_PASSWORD}"
+    database: "mushroom_olap_db"
+
+# Model parameters
+models:
+  logistic_regression:
+    max_iter: 200
+
+  decision_tree:
+    max_depth: 12
+
+  xgboost:
+    use_label_encoder: false
+    eval_metric: logloss
+
+# Model monitoring configuration
+monitoring:
+  threshold: 0.05 # p-value threshold for drift detection
+  alert_channels:
+    email: "alerts@example.com"
+    slack: "monitoring-alerts"
+  schedule: "daily"
+  data_drift:
+    enabled: true
+    reference_data_path: "data/validation/reference_data.parquet"
+  model_drift:
+    enabled: true
+    metrics:
+      - accuracy
+      - f1_score
+      - roc_auc
+
+# Feature engineering parameters
+feature_engineering:
+  drop_columns:
+    - gill_spacing
+    - stem_surface
+    - stem_root
+    - spore_print_color
+    - veil_type
+    - veil_color
+
+  encode_and_impute:
+    - cap_surface
+    - gill_attachment
+    - ring_type
+
+  handle_rare_categories:
+    - habitat
+    - stem_color
+    - gill_color
+    - cap_color
+    - cap_shape
+    - cap_surface
+    - ring_type
+
+  outlier_removal:
+    method: zscore
+    threshold: 2.5
+    columns:
+      - cap_diameter
+      - stem_height
+      - stem_width

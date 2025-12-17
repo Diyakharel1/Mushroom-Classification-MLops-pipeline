@@ -1,0 +1,128 @@
+# CI/CD Pipeline Configuration for Mushroom ETL Pipeline
+
+name: Mushroom ETL Pipeline CI/CD
+
+# Trigger the workflow on push or pull requests to the main branch
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    services:
+      mariadb-oltp:
+        image: mariadb:10.6
+        env:
+          MYSQL_ROOT_PASSWORD: example
+          MYSQL_DATABASE: mushroom_oltp_db
+        ports:
+          - 3307:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+      mariadb-olap:
+        image: mariadb:10.6
+        env:
+          MYSQL_ROOT_PASSWORD: example
+          MYSQL_DATABASE: mushroom_olap_db
+        ports:
+          - 3308:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pytest pytest-cov
+
+      - name: Create directories
+        run: |
+          mkdir -p data/raw
+          mkdir -p data/processed
+          mkdir -p data/test
+          mkdir -p models/metrics
+          mkdir -p logs
+
+      - name: Run tests
+        run: |
+          python -m pytest tests/ --cov=src --cov-report=xml
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v2
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+
+  build:
+    name: Build and push Docker images
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: ./docker/Dockerfile.api
+          push: true
+          tags: username/mushroom-classifier-api:latest
+
+      - name: Build and push ETL image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: ./docker/Dockerfile.etl
+          push: true
+          tags: username/mushroom-classifier-etl:latest
+
+  deploy:
+    name: Deploy to production
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Deploy to production server
+        # This would typically use SSH, Kubernetes, or other deployment methods
+        # For demo purposes we're using a placeholder
+        run: |
+          echo "Deploying to production server"
+          # Placeholder for actual deployment commands
+          echo "Deployment complete"
+
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke tests"
+          # Placeholder for smoke tests
+          echo "Smoke tests complete"

@@ -1,0 +1,228 @@
+
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database for Airflow metadata
+  postgres:
+    image: postgres:13
+    container_name: mushroom-postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-U", "airflow" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - mushroom-network
+
+  # Redis for Celery backend
+  redis:
+    image: redis:7.2-bookworm
+    container_name: mushroom-redis
+    expose:
+      - 6379
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - mushroom-network
+
+  # MariaDB with analytics capabilities
+  mariadb-columnstore:
+    image: mariadb:10.11
+    container_name: mushroom-mariadb-columnstore
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: mushroom_analytics
+      MYSQL_USER: mushroom_user
+      MYSQL_PASSWORD: mushroom_pass
+    ports:
+      - "3307:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./config/mariadb/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    command: >
+      --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --innodb-buffer-pool-size=256M --key-buffer-size=64M --max-connections=200 --query-cache-size=32M --query-cache-type=1 --tmp-table-size=64M --max-heap-table-size=64M --log-bin=mysql-bin --binlog-format=ROW --expire-logs-days=7
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot_password" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - mushroom-network
+
+  # Airflow Database Initialization
+  airflow-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mushroom-airflow-init
+    environment: &airflow-common-env
+      AIRFLOW_HOME: /app/airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__FERNET_KEY: EGCW9Ya-DVVMxTLRWscvi0JZoke3bJEnYQ_EeitF3Yw=
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      PYTHONPATH: /app
+      MARIADB_HOST: mariadb-columnstore
+      MARIADB_PORT: 3306
+      MARIADB_DATABASE: mushroom_analytics
+      MARIADB_USER: mushroom_user
+      MARIADB_PASSWORD: mushroom_pass
+      MLFLOW_TRACKING_URI: http://mlflow-server:5000
+    command: >
+      bash -c " airflow db init && airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin && echo 'Airflow initialized successfully' "
+    volumes:
+      - ./airflow/dags:/app/airflow/dags
+      - ./airflow/logs:/app/airflow/logs
+      - ./airflow/plugins:/app/airflow/plugins
+      - ./config:/app/config
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mushroom-network
+
+  # Airflow Webserver
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mushroom-airflow-webserver
+    command: webserver
+    ports:
+      - "8080:8080"
+    environment: *airflow-common-env
+    volumes:
+      - ./airflow/dags:/app/airflow/dags
+      - ./airflow/logs:/app/airflow/logs
+      - ./airflow/plugins:/app/airflow/plugins
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./src:/app/src
+      - ./config:/app/config
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mariadb-columnstore:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "http://localhost:8080/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - mushroom-network
+
+  # Airflow Scheduler
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mushroom-airflow-scheduler
+    command: scheduler
+    environment: *airflow-common-env
+    volumes:
+      - ./airflow/dags:/app/airflow/dags
+      - ./airflow/logs:/app/airflow/logs
+      - ./airflow/plugins:/app/airflow/plugins
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./src:/app/src
+      - ./config:/app/config
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mariadb-columnstore:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [ "CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname \"$${HOSTNAME}\"" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - mushroom-network
+
+  # MLflow Server
+  mlflow-server:
+    image: python:3.11-slim
+    container_name: mushroom-mlflow-server
+    ports:
+      - "5001:5000"
+    environment:
+      MLFLOW_BACKEND_STORE_URI: sqlite:///mlruns/mlflow.db
+      MLFLOW_DEFAULT_ARTIFACT_ROOT: /mlflow_artifacts
+    volumes:
+      - mlflow_data:/mlruns
+      - mlflow_artifacts:/mlflow_artifacts
+    command: >
+      bash -c " pip install mlflow==2.8.1 && mlflow server  --backend-store-uri sqlite:///mlruns/mlflow.db  --default-artifact-root /mlflow_artifacts  --host 0.0.0.0  --port 5000 "
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "http://localhost:5000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - mushroom-network
+
+  # Standalone ETL Application (optional profile)
+  mushroom-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mushroom-etl-standalone
+    environment:
+      PYTHONPATH: /app
+      MARIADB_HOST: mariadb-columnstore
+      MARIADB_PORT: 3306
+      MARIADB_DATABASE: mushroom_analytics
+      MARIADB_USER: mushroom_user
+      MARIADB_PASSWORD: mushroom_pass
+      MLFLOW_TRACKING_URI: http://mlflow-server:5000
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./src:/app/src
+      - ./config:/app/config
+    command: python -m src.pipeline --config /app/config/config.yaml
+    depends_on:
+      mariadb-columnstore:
+        condition: service_healthy
+      mlflow-server:
+        condition: service_healthy
+    profiles:
+      - standalone
+    networks:
+      - mushroom-network
+
+volumes:
+  postgres_data:
+  mariadb_data:
+  mlflow_data:
+  mlflow_artifacts:
+
+
+networks:
+  mushroom-network:
+    driver: bridge

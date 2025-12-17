@@ -1,0 +1,15 @@
+{
+  "data_source": "processed_parquet",
+  "model": "xgboost",
+  "n_train": 46369,
+  "n_test": 11593,
+  "n_features": 73,
+  "accuracy": 0.9975847494177521,
+  "precision_weighted": 0.9975846991808349,
+  "recall_weighted": 0.9975847494177521,
+  "f1_weighted": 0.9975846940954272,
+  "class_balance_test": {
+    "1": 0.5651686362460105,
+    "0": 0.43483136375398945
+  }
+}

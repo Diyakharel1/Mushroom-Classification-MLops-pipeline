@@ -1,0 +1,81 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.so
+*.out
+*.log
+*.tmp
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.env 
+.env.*
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+Untitled*.ipynb
+
+# Data files (optional - if your data is very large, you might not want to commit it)
+data/raw/
+data/processed/
+data/model_input/
+data/temp/
+
+# Models (if managed by MLflow/DVC or are large)
+models/
+mlruns/
+
+# Logs
+logs/
+*.log
+airflow-*.log
+airflow-*.err
+airflow-*.pid
+
+# Airflow
+airflow/logs/
+airflow/airflow-webserver.pid
+airflow/airflow-scheduler.pid
+airflow/simple_auth_manager_passwords.json.generated
+*.pid
+
+# MLflow
+mlflow.db
+.mlflow.pid
+
+# Temporary files
+*.tmp
+.DS_Store
+*.swp
+*.swo
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# Docker
+docker/docker-compose.yml
+
+# Generated files
+optimized_*
+*_demo.py
+CLEANUP_SUMMARY.md
